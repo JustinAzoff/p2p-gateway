@@ -6,7 +6,6 @@
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
-    const char *disco_server = getenv("DISCO_SERVER");
     const char *endpoint = getenv("ZYRE_BIND");
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
     const char *public_key_dir_path = getenv("PUBLIC_KEY_DIR_PATH");
@@ -35,23 +34,13 @@ gateway_actor (zsock_t *pipe, void *args)
         exit(1);
     }
 
-
-    if(!disco_server) {
-        fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
-        exit(1);
-    }
-
     if(!endpoint) {
         fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
 
-    zsimpledisco_t *disco = zsimpledisco_new();
-    zsimpledisco_verbose(disco);
-
     zcert_t *cert = NULL;
     if(private_key_path) {
-        zsimpledisco_set_private_key_path(disco, private_key_path);
         cert = zcert_load(private_key_path);
 
         zactor_t *auth = zactor_new (zauth,NULL);
@@ -60,8 +49,6 @@ gateway_actor (zsock_t *pipe, void *args)
         zstr_sendx (auth, "CURVE", public_key_dir_path, NULL);
         zsock_wait(auth);
     }
-
-    zsimpledisco_connect(disco, disco_server);
 
     zyre_t *node = zyre_new ((char *) args);
     if (!node)
@@ -79,21 +66,22 @@ gateway_actor (zsock_t *pipe, void *args)
     zyre_set_endpoint(node, "%s", endpoint);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
+    /*
     if(cert) {
         char *published_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
         zsimpledisco_publish(disco, published_endpoint, uuid);
     } else {
         zsimpledisco_publish(disco, endpoint, uuid);
     }
+    */
     //zyre_join (node, "CHAT");
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
     //zclock_sleep(1000);
-    zsimpledisco_get_values(disco);
 
     bool terminated = false;
 
-    zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), zsimpledisco_socket(disco), control, NULL);
+    zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), control, NULL);
     while (!terminated) {
         void *which = zpoller_wait (poller, -1);
         if (which == pipe) {
@@ -132,6 +120,7 @@ gateway_actor (zsock_t *pipe, void *args)
             free (message);
             zmsg_destroy (&msg);
         }
+        /*
         else
         if (which == zsimpledisco_socket (disco)) {
             zmsg_t *msg = zmsg_recv (which);
@@ -145,6 +134,7 @@ gateway_actor (zsock_t *pipe, void *args)
             free (value);
             zmsg_destroy (&msg);
         }
+        */
         else
         if (which == control) {
             zmsg_t *msg = zmsg_recv (which);
@@ -214,12 +204,6 @@ main (int argc, char *argv [])
     }
     if (argc == 2 && streq(argv[1], "keygen")) {
         exit(keygen());
-    }
-
-    char *disco_server = getenv("DISCO_SERVER");
-    if(!disco_server) {
-        fprintf(stderr, "Missing DISCO_SERVER env var:\nexport DISCO_SERVER=tcp://localhost:9100\n");
-        exit(1);
     }
 
     char *endpoint = getenv("ZYRE_BIND");

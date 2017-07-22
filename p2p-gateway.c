@@ -3,6 +3,23 @@
 
 #include "zyre.h"
 
+void
+connect_to_certs_with_endpoints(zyre_t *zyre, zcertstore_t *certstore)
+{
+    zcert_t *cert;
+    zlistx_t *certs = zcertstore_certs(certstore);
+    cert = (zcert_t *) zlistx_first(certs);
+    while (cert) {
+        char *endpoint = zcert_meta (cert, "endpoint");
+        char *real_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
+        fprintf(stderr, "Connect to %s\n", real_endpoint);
+        zyre_require_peer (zyre, endpoint, real_endpoint);
+        zstr_free(&real_endpoint);
+        cert = (zcert_t *) zlistx_next(certs);
+    }
+
+}
+
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
@@ -39,6 +56,7 @@ gateway_actor (zsock_t *pipe, void *args)
         exit(1);
     }
 
+    zcertstore_t *certstore = zcertstore_new(public_key_dir_path);
 
     zcert_t *cert = NULL;
     if(private_key_path) {
@@ -82,9 +100,11 @@ gateway_actor (zsock_t *pipe, void *args)
 
     bool terminated = false;
 
+    int64_t last_bootstrap = 0;
+
     zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), control, NULL);
     while (!terminated) {
-        void *which = zpoller_wait (poller, -1);
+        void *which = zpoller_wait (poller, 2000);
         if (which == pipe) {
             zmsg_t *msg = zmsg_recv (which);
             if (!msg)
@@ -162,6 +182,12 @@ gateway_actor (zsock_t *pipe, void *args)
             zframe_destroy(&routing_id);
             zmsg_destroy(&msg);
         }
+
+        if(zclock_mono() - last_bootstrap > 1*1000) {
+            connect_to_certs_with_endpoints(node, certstore);
+            last_bootstrap = zclock_mono();
+        }
+
     }
     zpoller_destroy (&poller);
     zyre_stop (node);

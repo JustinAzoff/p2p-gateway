@@ -13,6 +13,11 @@ gateway_actor (zsock_t *pipe, void *args)
     const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
     const char *control_endpoint = getenv("CONTROL_ENDPOINT");
 
+    if(!endpoint) {
+        fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
+        exit(1);
+    }
+
     if(!pubsub_endpoint)
         pubsub_endpoint = "tcp://127.0.0.1:14000";
     if(!control_endpoint)
@@ -34,10 +39,6 @@ gateway_actor (zsock_t *pipe, void *args)
         exit(1);
     }
 
-    if(!endpoint) {
-        fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
-        exit(1);
-    }
 
     zcert_t *cert = NULL;
     if(private_key_path) {

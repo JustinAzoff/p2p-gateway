@@ -11,10 +11,12 @@ connect_to_certs_with_endpoints(zyre_t *zyre, zcertstore_t *certstore)
     cert = (zcert_t *) zlistx_first(certs);
     while (cert) {
         char *endpoint = zcert_meta (cert, "endpoint");
-        char *real_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
-        fprintf(stderr, "Connect to %s\n", real_endpoint);
-        zyre_require_peer (zyre, endpoint, real_endpoint);
-        zstr_free(&real_endpoint);
+        if(endpoint) {
+            char *real_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
+            fprintf(stderr, "Connect to %s\n", real_endpoint);
+            zyre_require_peer (zyre, endpoint, real_endpoint);
+            zstr_free(&real_endpoint);
+        }
         cert = (zcert_t *) zlistx_next(certs);
     }
 
@@ -183,7 +185,7 @@ gateway_actor (zsock_t *pipe, void *args)
             zmsg_destroy(&msg);
         }
 
-        if(zclock_mono() - last_bootstrap > 1*1000) {
+        if(zclock_mono() - last_bootstrap > 5*1000) {
             connect_to_certs_with_endpoints(node, certstore);
             last_bootstrap = zclock_mono();
         }
